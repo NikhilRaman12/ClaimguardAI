@@ -1,0 +1,39 @@
+services:
+  mongodb:
+    image: mongo:7
+    container_name: claimguard-mongodb
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongo-data:/data/db
+    healthcheck:
+      test: ["CMD", "mongosh", "--eval", "db.adminCommand('ping')"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  api:
+    build:
+      context: ./backend
+    container_name: claimguard-api
+    env_file:
+      - .env
+    ports:
+      - "8000:8000"
+    depends_on:
+      mongodb:
+        condition: service_healthy
+
+  ui:
+    build:
+      context: ./frontend
+    container_name: claimguard-ui
+    environment:
+      CLAIMGUARD_API_URL: http://api:8000/api
+    ports:
+      - "8501:8501"
+    depends_on:
+      - api
+
+volumes:
+  mongo-data:
