@@ -35,6 +35,27 @@ def test_claims_and_dashboard_are_secured_and_available() -> None:
     assert "automation_rate" in dashboard.json()
 
 
+def test_public_operations_mode_exposes_api_without_login() -> None:
+    claims = client.get("/api/claims")
+    assert claims.status_code == 200
+    case_id = claims.json()[0]["case_id"]
+
+    for path in [
+        "/api/dashboard/kpis",
+        "/api/analytics",
+        "/api/agents/status",
+        "/api/audit",
+        "/api/settings",
+        "/api/reports/claims.json",
+    ]:
+        response = client.get(path)
+        assert response.status_code == 200
+
+    approval = client.post(f"/api/claims/{case_id}/approve", json={"note": "Approved from public operations mode."})
+    assert approval.status_code == 200
+    assert approval.json()["approval_history"][-1]["note"] == "Approved from public operations mode."
+
+
 def test_create_claim_runs_orchestration() -> None:
     auth = {"Authorization": f"Bearer {token()}"}
     response = client.post(

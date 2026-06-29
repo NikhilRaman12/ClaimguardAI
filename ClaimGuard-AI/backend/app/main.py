@@ -1,5 +1,8 @@
-from fastapi import FastAPI
+import logging
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
+from fastapi.exceptions import RequestValidationError
 from app.api import agents, analytics, audit, auth, claims, dashboard, health, reports, settings
 from app.core.config import get_settings
 from app.core.logging import configure_logging
@@ -19,7 +22,7 @@ def create_app() -> FastAPI:
     app.add_middleware(
         CORSMiddleware,
         allow_origins=app_settings.cors_origin_list,
-        allow_credentials=True,
+        allow_credentials=app_settings.cors_allow_credentials,
         allow_methods=["*"],
         allow_headers=["*"],
     )
@@ -37,6 +40,21 @@ def create_app() -> FastAPI:
         health.router,
     ]:
         app.include_router(router, prefix=app_settings.api_prefix)
+
+    @app.exception_handler(RequestValidationError)
+    async def validation_exception_handler(request: Request, exc: RequestValidationError) -> JSONResponse:
+        return JSONResponse(
+            status_code=422,
+            content={"detail": exc.errors(), "path": str(request.url.path)},
+        )
+
+    @app.exception_handler(Exception)
+    async def unhandled_exception_handler(request: Request, exc: Exception) -> JSONResponse:
+        logging.getLogger("claimguard.api").exception("Unhandled API error", extra={"path": request.url.path})
+        return JSONResponse(
+            status_code=500,
+            content={"detail": "Internal server error", "path": str(request.url.path)},
+        )
     return app
 
 

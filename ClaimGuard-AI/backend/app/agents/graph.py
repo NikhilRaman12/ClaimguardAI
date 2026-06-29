@@ -64,9 +64,8 @@ class ClaimGraph:
         except Exception:
             self.compiled = None
 
-    def run(self, state: ClaimState) -> ClaimState:
-        if self.compiled:
-            return self.compiled.invoke(state)
+    def _run_local(self, state: ClaimState) -> ClaimState:
+        current = dict(state)
         for node in [
             intake_agent,
             document_validation_agent,
@@ -77,8 +76,22 @@ class ClaimGraph:
             compliance_agent,
             supervisor_agent,
         ]:
-            state = node(state)
-        route = state.get("route")
-        state = human_review_agent(state) if route in {"human_review", "investigation"} else settlement_recommendation_agent(state)
-        state = audit_agent(state)
-        return notification_agent(state)
+            current = node(current)
+        route = current.get("route")
+        if route in {"human_review", "investigation"}:
+            current = human_review_agent(current)
+        elif route == "reject":
+            current["status"] = "Rejected"
+            current["decision"] = "reject"
+        else:
+            current = settlement_recommendation_agent(current)
+        current = audit_agent(current)
+        return notification_agent(current)
+
+    def run(self, state: ClaimState) -> ClaimState:
+        if self.compiled:
+            try:
+                return self.compiled.invoke(dict(state))
+            except Exception:
+                self.compiled = None
+        return self._run_local(state)

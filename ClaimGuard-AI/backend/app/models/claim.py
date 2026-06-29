@@ -86,3 +86,7 @@ class ClaimDecision(BaseModel):
     reason: str
     next_status: ClaimStatus
     settlement_amount: float | None = None
+
+
+class ClaimApprovalRequest(BaseModel):
+    note: str = Field(default="Approved by human reviewer.", min_length=3, max_length=1000)

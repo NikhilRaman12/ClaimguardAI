@@ -13,6 +13,14 @@ def page_header(title: str, subtitle: str) -> None:
     st.write("")
 
 
+def status_strip(items: list[tuple[str, str, str]]) -> None:
+    badges = "".join(
+        f"<div class='status-pill'><span class='status-dot status-{tone}'></span><span>{label}</span><strong>{value}</strong></div>"
+        for label, value, tone in items
+    )
+    st.markdown(f"<div class='status-strip'>{badges}</div>", unsafe_allow_html=True)
+
+
 def metric_card(label: str, value: str, tone: str = "blue") -> None:
     st.markdown(
         f"""

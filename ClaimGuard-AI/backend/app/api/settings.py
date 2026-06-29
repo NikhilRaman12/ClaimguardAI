@@ -14,4 +14,5 @@ def settings(user: dict = Depends(require_permission("claims:read"))) -> dict[st
         "database": app_settings.mongodb_database,
         "rate_limit_per_minute": app_settings.rate_limit_per_minute,
         "mongo_enabled": app_settings.use_mongo,
+        "auth_required": app_settings.auth_required,
     }

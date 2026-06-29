@@ -8,7 +8,7 @@ from app.core.config import get_settings
 
 
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
-oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/auth/login")
+oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/auth/login", auto_error=False)
 
 
 USERS = {
@@ -57,8 +57,22 @@ def authenticate_user(email: str, password: str) -> dict[str, Any] | None:
     return user
 
 
-def get_current_user(token: str = Depends(oauth2_scheme)) -> dict[str, Any]:
+def default_user() -> dict[str, Any]:
     settings = get_settings()
+    return {
+        "email": settings.demo_actor_email,
+        "name": settings.demo_actor_name,
+        "role": settings.demo_actor_role,
+        "hashed_password": "",
+    }
+
+
+def get_current_user(token: str | None = Depends(oauth2_scheme)) -> dict[str, Any]:
+    settings = get_settings()
+    if not token:
+        if settings.auth_required:
+            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Authentication required")
+        return default_user()
     try:
         payload = jwt.decode(token, settings.secret_key, algorithms=[settings.algorithm])
         email = payload.get("sub")

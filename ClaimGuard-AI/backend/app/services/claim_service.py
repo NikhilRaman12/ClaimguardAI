@@ -3,6 +3,18 @@ from app.models.claim import AgentOutput, ApprovalEvent, Claim, ClaimCreate, Cla
 from app.repositories.claims import ClaimRepository
 
 
+def fraud_indicators_for_score(score: int) -> list[str]:
+    if score >= 75:
+        return [
+            "High claim-to-coverage ratio",
+            "Manual investigation threshold exceeded",
+            "Additional document verification required",
+        ]
+    if score >= 40:
+        return ["Moderate anomaly score", "Human approval recommended"]
+    return ["Low-risk claim profile"]
+
+
 class ClaimService:
     def __init__(self, repository: ClaimRepository) -> None:
         self.repository = repository
@@ -36,14 +48,14 @@ class ClaimService:
             claim.status = ClaimStatus.investigation if route == "investigation" else ClaimStatus.human_review
         else:
             claim.status = ClaimStatus.settlement
-        claim.agent_outputs.extend(
-            [
-                AgentOutput(agent="Intake Agent", status="completed", confidence=0.98, explanation="Claim data normalized."),
-                AgentOutput(agent="Policy Verification Agent", status="completed", confidence=0.94, explanation="Policy and coverage validated."),
-                AgentOutput(agent="Fraud Detection Agent", status="completed", confidence=0.91, explanation=f"Fraud score calculated at {claim.risk_score}."),
-                AgentOutput(agent="Supervisor Agent", status="completed", confidence=0.96, explanation=f"Routed to {claim.status.value}."),
-            ]
-        )
+        claim.fraud_indicators = fraud_indicators_for_score(claim.risk_score)
+        claim.agent_outputs = [
+            AgentOutput(agent="Intake Agent", status="completed", confidence=0.98, explanation="Claim data normalized."),
+            AgentOutput(agent="Document Validation Agent", status="completed", confidence=0.97, explanation="Submitted evidence package checked for processing readiness."),
+            AgentOutput(agent="Policy Verification Agent", status="completed", confidence=0.94, explanation="Policy and coverage validated."),
+            AgentOutput(agent="Fraud Detection Agent", status="completed", confidence=0.91, explanation=f"Fraud score calculated at {claim.risk_score}."),
+            AgentOutput(agent="Supervisor Agent", status="completed", confidence=0.96, explanation=f"Routed to {claim.status.value}."),
+        ]
         return self.repository.update_claim(claim)
 
     def decide(self, case_id: str) -> ClaimDecision:

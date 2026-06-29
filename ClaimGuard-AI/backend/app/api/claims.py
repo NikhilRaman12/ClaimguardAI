@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException
 from app.api.dependencies import get_audit_service, get_claim_service
 from app.core.security import require_permission
-from app.models.claim import Claim, ClaimCreate, ClaimDecision
+from app.models.claim import Claim, ClaimApprovalRequest, ClaimCreate, ClaimDecision
 from app.services.audit_service import AuditService
 from app.services.claim_service import ClaimService
 
@@ -67,12 +67,13 @@ def decision(
 @router.post("/{case_id}/approve", response_model=Claim)
 def approve_claim(
     case_id: str,
-    note: str = "Approved by human reviewer.",
+    payload: ClaimApprovalRequest | None = None,
     service: ClaimService = Depends(get_claim_service),
     audit: AuditService = Depends(get_audit_service),
     user: dict = Depends(require_permission("approve")),
 ) -> Claim:
     try:
+        note = payload.note if payload else "Approved by human reviewer."
         claim = service.approve(case_id, user["email"], note)
         audit.record(user["email"], "claim.approved", case_id, "success", {"note": note})
         return claim

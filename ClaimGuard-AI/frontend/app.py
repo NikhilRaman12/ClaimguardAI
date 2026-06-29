@@ -11,8 +11,8 @@ CURRENT_DIR = Path(__file__).resolve().parent
 if str(CURRENT_DIR) not in sys.path:
     sys.path.insert(0, str(CURRENT_DIR))
 
-from components.api import API_URL, get, login, post
-from components.ui import claims_table, metric_card, page_header, risk_tone
+from components.api import API_URL, get, post
+from components.ui import claims_table, metric_card, page_header, risk_tone, status_strip
 
 
 def load_css() -> None:
@@ -27,40 +27,6 @@ def load_css() -> None:
 
 st.set_page_config(page_title="ClaimGuard AI", page_icon="CG", layout="wide")
 load_css()
-
-
-def login_screen() -> None:
-    page_header("ClaimGuard AI", "Enterprise insurance claims orchestration")
-
-    left, right = st.columns([1, 1])
-
-    with left:
-        st.markdown("### Secure Access")
-        email = st.text_input("Email", value="admin@claimguard.ai")
-        password = st.text_input("Password", value="ClaimGuard@2026", type="password")
-
-        if st.button("Sign in", type="primary", use_container_width=True):
-            payload = login(email, password)
-            if payload:
-                st.session_state.token = payload["access_token"]
-                st.session_state.user = payload
-                st.rerun()
-            else:
-                st.error("Login failed. Please check backend API and credentials.")
-
-    with right:
-        st.markdown(
-            """
-            <div class="section-panel">
-              <h3>Operational Control Plane</h3>
-              <p>Claims intake, fraud intelligence, policy validation, human approvals, audit trails, and executive analytics in one governed workflow.</p>
-              <span class="badge badge-green">RBAC Enabled</span>
-              <span class="badge badge-blue">AI Orchestrated</span>
-              <span class="badge badge-amber">Audit Ready</span>
-            </div>
-            """,
-            unsafe_allow_html=True,
-        )
 
 
 def sidebar() -> str:
@@ -85,24 +51,29 @@ def sidebar() -> str:
     )
 
     st.sidebar.divider()
-    user = st.session_state.get("user", {})
-    st.sidebar.write(user.get("name", "Authenticated User"))
-    st.sidebar.caption(user.get("role", ""))
-
-    if st.sidebar.button("Sign out"):
-        st.session_state.clear()
-        st.rerun()
+    st.sidebar.write("Open operations mode")
+    st.sidebar.caption("No interactive login required")
 
     return page
 
 
 def executive_dashboard() -> None:
     page_header(
-        "Executive Dashboard",
+        "Operations Command",
         "Real-time claims operations, automation performance, and enterprise risk posture",
     )
 
     kpi = get("/dashboard/kpis") or {}
+    health = get("/health") or {}
+
+    status_strip(
+        [
+            ("API", health.get("status", "unknown"), "green" if health.get("status") == "healthy" else "amber"),
+            ("Auth", "open" if not health.get("auth_required") else "required", "green" if not health.get("auth_required") else "amber"),
+            ("Claims", str(health.get("claims_available", 0)), "blue"),
+            ("Storage", "mongo" if health.get("mongo_enabled") else "memory", "blue"),
+        ]
+    )
 
     cols = st.columns(4)
     values = [
@@ -129,12 +100,12 @@ def executive_dashboard() -> None:
     left, right = st.columns([1.1, 0.9])
 
     with left:
-        st.markdown("### Case Pipeline")
+        st.markdown("### Live Case Pipeline")
         required = ["case_id", "customer", "category", "status", "risk_score", "claim_amount"]
         st.dataframe(frame[required].head(12), use_container_width=True, hide_index=True)
 
     with right:
-        st.markdown("### Risk Distribution")
+        st.markdown("### Portfolio Risk Distribution")
         fig = px.histogram(frame, x="risk_score", nbins=12)
         fig.update_layout(
             template="plotly_dark",
@@ -152,8 +123,9 @@ def claims_page() -> None:
         st.info("No claims available.")
         return
 
-    search = st.text_input("Search claims, customers, policies, or adjusters")
-    category = st.selectbox("Category", ["All"] + sorted({item.get("category", "") for item in claims}))
+    left, right = st.columns([2, 1])
+    search = left.text_input("Search claims, customers, policies, or adjusters")
+    category = right.selectbox("Category", ["All"] + sorted({item.get("category", "") for item in claims}))
 
     filtered = [
         item
@@ -200,9 +172,10 @@ def claim_details_page() -> None:
         )
 
         if st.button("Run Agent Orchestration", type="primary"):
-            post(f"/claims/{selected}/process")
-            st.success("Claim orchestration completed.")
-            st.rerun()
+            result = post(f"/claims/{selected}/process")
+            if result:
+                st.success("Claim orchestration completed.")
+                st.rerun()
 
     st.markdown("### Agent Outputs")
     st.dataframe(pd.DataFrame(claim.get("agent_outputs", [])), use_container_width=True, hide_index=True)
@@ -280,6 +253,14 @@ def agents_page() -> None:
         return
 
     frame = pd.DataFrame(status)
+    health = get("/health") or {}
+    status_strip(
+        [
+            ("Runtime", health.get("environment", "unknown"), "blue"),
+            ("API", health.get("status", "unknown"), "green" if health.get("status") == "healthy" else "amber"),
+            ("Agent mesh", f"{len(frame)} online", "green"),
+        ]
+    )
     st.dataframe(frame, use_container_width=True, hide_index=True)
 
     fig = px.bar(frame, x="agent", y="sla", color="mode")
@@ -325,9 +306,10 @@ def human_review_page() -> None:
         )
 
         if st.button("Approve Claim", type="primary"):
-            post(f"/claims/{selected}/approve", {"note": note})
-            st.success(f"{selected} approved.")
-            st.rerun()
+            result = post(f"/claims/{selected}/approve", {"note": note})
+            if result:
+                st.success(f"{selected} approved.")
+                st.rerun()
 
 
 def analytics_page() -> None:
@@ -395,9 +377,10 @@ def settings_page() -> None:
 
 
 def main() -> None:
-    if "token" not in st.session_state:
-        login_screen()
-        return
+    st.session_state.setdefault(
+        "user",
+        {"name": "ClaimGuard Operations", "role": "open-operations"},
+    )
 
     selected_page = sidebar()
 
