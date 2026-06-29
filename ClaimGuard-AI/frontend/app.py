@@ -15,7 +15,7 @@ CURRENT_DIR = Path(__file__).resolve().parent
 if str(CURRENT_DIR) not in sys.path:
     sys.path.insert(0, str(CURRENT_DIR))
 
-from components.api import API_URL, get, post
+from components.api import get, post, runtime_label
 from components.ui import claims_table, metric_card, page_header, risk_tone, status_strip
 
 
@@ -68,7 +68,7 @@ def render_bar_chart(frame: pd.DataFrame, x: str, y: str, title: str | None = No
 
 def sidebar() -> str:
     st.sidebar.markdown("## ClaimGuard AI")
-    st.sidebar.caption(f"API: {API_URL}")
+    st.sidebar.caption(runtime_label())
 
     page = st.sidebar.radio(
         "Navigation",
