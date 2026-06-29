@@ -3,8 +3,12 @@ from pathlib import Path
 import sys
 
 import pandas as pd
-import plotly.express as px
 import streamlit as st
+
+try:
+    import plotly.express as px
+except ModuleNotFoundError:
+    px = None
 
 # Ensure frontend folder is always available for imports
 CURRENT_DIR = Path(__file__).resolve().parent
@@ -27,6 +31,39 @@ def load_css() -> None:
 
 st.set_page_config(page_title="ClaimGuard AI", page_icon="CG", layout="wide")
 load_css()
+
+
+def render_histogram(frame: pd.DataFrame, column: str) -> None:
+    if px:
+        fig = px.histogram(frame, x=column, nbins=12)
+        fig.update_layout(
+            template="plotly_dark",
+            paper_bgcolor="rgba(0,0,0,0)",
+            plot_bgcolor="rgba(0,0,0,0)",
+        )
+        st.plotly_chart(fig, use_container_width=True)
+        return
+
+    histogram = pd.cut(frame[column], bins=12).value_counts().sort_index()
+    histogram.index = histogram.index.astype(str)
+    st.bar_chart(histogram)
+
+
+def render_bar_chart(frame: pd.DataFrame, x: str, y: str, title: str | None = None, color: str | None = None) -> None:
+    if px:
+        fig = px.bar(frame, x=x, y=y, title=title, color=color)
+        fig.update_layout(
+            template="plotly_dark",
+            paper_bgcolor="rgba(0,0,0,0)",
+            plot_bgcolor="rgba(0,0,0,0)",
+            xaxis_tickangle=-35,
+        )
+        st.plotly_chart(fig, use_container_width=True)
+        return
+
+    if title:
+        st.markdown(f"#### {title}")
+    st.bar_chart(frame.set_index(x)[y])
 
 
 def sidebar() -> str:
@@ -106,13 +143,7 @@ def executive_dashboard() -> None:
 
     with right:
         st.markdown("### Portfolio Risk Distribution")
-        fig = px.histogram(frame, x="risk_score", nbins=12)
-        fig.update_layout(
-            template="plotly_dark",
-            paper_bgcolor="rgba(0,0,0,0)",
-            plot_bgcolor="rgba(0,0,0,0)",
-        )
-        st.plotly_chart(fig, use_container_width=True)
+        render_histogram(frame, "risk_score")
 
 
 def claims_page() -> None:
@@ -263,14 +294,7 @@ def agents_page() -> None:
     )
     st.dataframe(frame, use_container_width=True, hide_index=True)
 
-    fig = px.bar(frame, x="agent", y="sla", color="mode")
-    fig.update_layout(
-        template="plotly_dark",
-        paper_bgcolor="rgba(0,0,0,0)",
-        plot_bgcolor="rgba(0,0,0,0)",
-        xaxis_tickangle=-35,
-    )
-    st.plotly_chart(fig, use_container_width=True)
+    render_bar_chart(frame, x="agent", y="sla", color="mode")
 
 
 def fraud_page() -> None:
@@ -333,13 +357,7 @@ def analytics_page() -> None:
                 continue
 
             frame = pd.DataFrame({"name": list(payload.keys()), "value": list(payload.values())})
-            fig = px.bar(frame, x="name", y="value", title=title)
-            fig.update_layout(
-                template="plotly_dark",
-                paper_bgcolor="rgba(0,0,0,0)",
-                plot_bgcolor="rgba(0,0,0,0)",
-            )
-            st.plotly_chart(fig, use_container_width=True)
+            render_bar_chart(frame, x="name", y="value", title=title)
 
 
 def audit_page() -> None:
